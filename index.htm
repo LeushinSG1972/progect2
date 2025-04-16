@@ -1,259 +1,192 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Cylinder in Three.js</title>
+    <meta charset="utf-8">
+    <title>3D Цилиндры с полосатой текстурой и шумом</title>
     <style>
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            background-color: #f0f0f0;
-        }
-        canvas { 
-            display: block; 
-        }
-        #info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
-            background: rgba(0,0,0,0.7);
-            padding: 10px;
-            border-radius: 5px;
-            font-family: Arial, sans-serif;
-        }
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
     </style>
 </head>
 <body>
-    <div id="info">3D Цилиндр<br>Используйте мышь для вращения<br>Колесо мыши для масштабирования</div>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
     <script>
-        // Предопределенные материалы
-
-  function de(r, g, b) {
-    // Нормализуем цвет (0-255 -> 0-1)
-    const normR = r / 255;
-    const normG = g / 255;
-    const normB = b / 255;
-    
-    // Создаем canvas для генерации текстуры
-    const canvas = document.createElement('canvas');
-    const size = 1024; // высокое разрешение для лучшего качества
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getImageData(0, 0, size, size);
-    
-    // Заполняем фоновым цветом
-    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-    ctx.fillRect(0, 0, size, size);
-    
-    // Параметры текстуры дерева
-    const ringCount = 15 + Math.floor(Math.random() * 10);
-    const ringWidth = 0.02 + Math.random() * 0.04;
-    const grainIntensity = 0.4 + Math.random() * 0.3;
-    
-    // Генерируем кольца роста
-    for (let i = 0; i < ringCount; i++) {
-        const progress = i / ringCount;
-        const radius = 0.1 + progress * 0.8;
-        
-        // Темный вариант базового цвета для колец
-        const darken = 0.4 + 0.3 * Math.sin(progress * Math.PI);
-        const ringR = Math.floor(normR * darken * 255);
-        const ringG = Math.floor(normG * darken * 255);
-        const ringB = Math.floor(normB * darken * 255);
-        
-        ctx.strokeStyle = `rgb(${ringR}, ${ringG}, ${ringB})`;
-        ctx.lineWidth = ringWidth * size;
-        ctx.lineCap = 'round';
-        
-        // Рисуем деформированные кольца
-        ctx.beginPath();
-        const centerX = size/2 + (Math.random() - 0.5) * 0.1 * size;
-        const centerY = size/2 + (Math.random() - 0.5) * 0.1 * size;
-        const radiusX = radius * size/2;
-        const radiusY = radiusX * (0.85 + Math.random() * 0.3);
-        ctx.ellipse(centerX, centerY, radiusX, radiusY, 
-                   Math.random() * 0.2, 0, Math.PI * 2);
-        ctx.stroke();
-    }
-    
-    // Добавляем древесные волокна
-    for (let i = 0; i < 150; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const length = 20 + Math.random() * 50;
-        const angle = Math.random() * Math.PI * 2;
-        
-        // Вариация цвета волокон
-        const vary = 0.7 + Math.random() * 0.6;
-        const fiberR = Math.min(255, Math.floor(normR * vary * 255));
-        const fiberG = Math.min(255, Math.floor(normG * vary * 255));
-        const fiberB = Math.min(255, Math.floor(normB * vary * 255));
-        
-        ctx.strokeStyle = `rgba(${fiberR}, ${fiberG}, ${fiberB}, ${grainIntensity})`;
-        ctx.lineWidth = 1 + Math.random() * 2;
-        
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + Math.cos(angle) * length, 
-                   y + Math.sin(angle) * length);
-        ctx.stroke();
-    }
-    
-    // Создаем bump map для рельефа
-    const bumpCanvas = document.createElement('canvas');
-    bumpCanvas.width = size/2; // bump map может быть меньшего разрешения
-    bumpCanvas.height = size/2;
-    const bumpCtx = bumpCanvas.getContext('2d');
-    bumpCtx.drawImage(canvas, 0, 0, size/2, size/2);
-    
-    // Создаем Three.js текстуры
-    const map = new THREE.CanvasTexture(canvas);
-    const bumpMap = new THREE.CanvasTexture(bumpCanvas);
-    
-    // Создаем и возвращаем материал
-    return new THREE.MeshStandardMaterial({
-        map: map,
-        bumpMap: bumpMap,
-        bumpScale: 0.05,
-        roughness: 0.7,
-        metalness: 0.0,
-        color: new THREE.Color(normR, normG, normB)
-    });
-}
-
-        
-
-        // Функция создания цилиндра
-        function createCylinder(d, x, y, z, v, m, scene) {
-            // Проверка валидности параметров
-            if (m < 0 || m >= materials.length) {
-                console.error('Invalid material index');
-                m = 0; // используем материал по умолчанию
+        // 1. Функция создания полосатого материала с шумом
+        function createStripedMaterial(r, g, b, noiseIntensity = 0.2) {
+            const canvas = document.createElement('canvas');
+            const size = 512;
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // Заливаем фон
+            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Рисуем вертикальные полосы
+            const stripeCount = 10 + Math.floor(Math.random() * 10);
+            const stripeWidth = size / stripeCount;
+            
+            for (let i = 0; i < stripeCount; i++) {
+                // Чередуем светлые и темные полосы
+                const darken = i % 2 === 0 ? 0.7 : 1.3;
+                ctx.fillStyle = `rgb(${r*darken}, ${g*darken}, ${b*darken})`;
+                ctx.fillRect(i * stripeWidth, 0, stripeWidth, size);
             }
+            
+            // Добавляем шум
+            const imageData = ctx.getImageData(0, 0, size, size);
+            const data = imageData.data;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                // Добавляем шум к каждому каналу
+                const noise = (Math.random() - 0.5) * 255 * noiseIntensity;
+                data[i]   = Math.min(255, Math.max(0, data[i]   + noise)); // R
+                data[i+1] = Math.min(255, Math.max(0, data[i+1] + noise)); // G
+                data[i+2] = Math.min(255, Math.max(0, data[i+2] + noise)); // B
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            
+            // Создаем текстуру
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(1, 3);
+            
+            // Возвращаем готовый материал
+            return new THREE.MeshStandardMaterial({
+                map: texture,
+                roughness: 0.5 + Math.random() * 0.3, // Добавляем вариативность шероховатости
+                metalness: 0.0,
+                bumpMap: generateBumpMap(canvas), // Добавляем карту рельефа
+                bumpScale: 0.05
+            });
+        }
 
-            // Параметры цилиндра
-            const radiusTop = 0.5;
-            const radiusBottom = 0.5;
-            const height = d;
-            const radialSegments = 32;
-            const heightSegments = 1;
-            const openEnded = false;
-            const thetaStart = 0;
-            const thetaLength = Math.PI * 2;
+        // 2. Генерация карты рельефа (bump map)
+        function generateBumpMap(sourceCanvas) {
+            const bumpCanvas = document.createElement('canvas');
+            bumpCanvas.width = sourceCanvas.width / 2;
+            bumpCanvas.height = sourceCanvas.height / 2;
+            const bumpCtx = bumpCanvas.getContext('2d');
+            
+            // Упрощаем изображение для bump map
+            bumpCtx.drawImage(sourceCanvas, 0, 0, bumpCanvas.width, bumpCanvas.height);
+            
+            // Конвертируем в grayscale
+            const imageData = bumpCtx.getImageData(0, 0, bumpCanvas.width, bumpCanvas.height);
+            const data = imageData.data;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+                data[i] = data[i+1] = data[i+2] = gray;
+            }
+            
+            bumpCtx.putImageData(imageData, 0, 0);
+            
+            return new THREE.CanvasTexture(bumpCanvas);
+        }
 
-            // Создаем геометрию цилиндра
-            const geometry = new THREE.CylinderGeometry(
-                radiusTop,
-                radiusBottom,
-                height,
-                radialSegments,
-                heightSegments,
-                openEnded,
-                thetaStart,
-                thetaLength
-            );
-
-            // Создаем меш (объект) цилиндра
-            const cylinder = new THREE.Mesh(geometry, materials[m]);
-
-            // Позиционируем цилиндр
+        // 3. Функция создания цилиндра (без изменений)
+        function createCylinder(d, x, y, z, v, material, scene) {
+            const geometry = new THREE.CylinderGeometry(0.5, 0.5, d, 32);
+            const cylinder = new THREE.Mesh(geometry, material);
             cylinder.position.set(x, y, z);
-
-            // Ориентируем цилиндр в зависимости от оси (v)
-            switch(v) {
-                case 0: // параллелен оси X
-                    cylinder.rotation.z = Math.PI / 2;
-                    break;
-                case 1: // параллелен оси Y (стандартная ориентация Three.js)
-                    // ничего не делаем - это ориентация по умолчанию
-                    break;
-                case 2: // параллелен оси Z
-                    cylinder.rotation.x = Math.PI / 2;
-                    break;
-                default:
-                    console.error('Invalid axis value, using default (Y-axis)');
-            }
-
-            // Добавляем цилиндр на сцену
+            
+            if (v === 0) cylinder.rotation.z = Math.PI/2;
+            if (v === 2) cylinder.rotation.x = Math.PI/2;
+            
             scene.add(cylinder);
-
             return cylinder;
         }
 
-        // Инициализация Three.js сцены
-        let scene, camera, renderer, controls;
+        // 4. Инициализация сцены
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        camera.position.set(14, 14, 14);
+        
+        const renderer = new THREE.WebGLRenderer({antialias: true});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        
+        // Освещение
+        const light1 = new THREE.DirectionalLight(0xffffff, 1);
+        light1.position.set(1, 1, 1);
+        scene.add(light1);
+        scene.add(new THREE.AmbientLight(0x404040));
+        
+        // Визуальные помощники
+        scene.add(new THREE.GridHelper(20, 20));
+        scene.add(new THREE.AxesHelper(5));
 
-        function init() {
-            // Создаем сцену
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x222222);
+        // 5. Создаем материалы с разными параметрами шума
+        const material1 = createStripedMaterial(150 , 100, 100,0.8); // Красный, сильный шум
+        const material2 = createStripedMaterial(120 , 90, 90,0.8); // Синий, слабый шум
+        const material3 = createStripedMaterial(100, 55, 100, 0.2); // Зеленый, средний шум
 
-            // Создаем камеру
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(10, 10, 10);
-
-            // Создаем рендерер
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
-            document.body.appendChild(renderer.domElement);
-
-            // Добавляем OrbitControls для управления камерой
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.05;
-
-            // Добавляем освещение
-            const ambientLight = new THREE.AmbientLight(0x404040);
-            scene.add(ambientLight);
-
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-            directionalLight.position.set(5, 10, 7);
-            directionalLight.castShadow = true;
-            scene.add(directionalLight);
-
-            const hemisphereLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 0.5);
-            scene.add(hemisphereLight);
-
-            // Создаем сетку для ориентации
-            const gridHelper = new THREE.GridHelper(20, 20);
-            scene.add(gridHelper);
-
-            const axesHelper = new THREE.AxesHelper(5);
-            scene.add(axesHelper);
-
-            // Создаем несколько цилиндров для демонстрации
-            createCylinder(4, 0, 0, 0, 1, 1, scene); // Вертикальный зеленый
-            createCylinder(3, 5, 2, 0, 0, 0, scene); // Горизонтальный красный (по X)
-            createCylinder(2, -3, -1, 4, 2, 2, scene); // По Z синий
-            createCylinder(1, -2, 3, -3, 1, 3, scene); // Вертикальный желтый
-            createCylinder(1.5, 2, -2, -2, 0, 4, scene); // Горизонтальный металлический
-
-            // Обработка изменения размера окна
-            window.addEventListener('resize', onWindowResize);
-
-            // Запускаем анимацию
-            animate();
+   function b(a1, a2, a3, x1, x2, x3, m, scene) {
+            const geometry = new THREE.BoxGeometry(a1, a2, a3);
+            const box = new THREE.Mesh(geometry, m);
+            box.position.set(x1, x2, x3);
+            
+            if (scene) {
+                scene.add(box);
+            }
+            
+            return box;
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
+   var gg= standardTransparent = new THREE.MeshStandardMaterial({
+            color: 0x00aaff,
+            transparent: true,
+            opacity: 0.4,
+            roughness: 0.1,
+            metalness: 0.1,
+            side: THREE.DoubleSide
+        });
 
+b(6,5,0.4,-4,5,-9,gg,scene); b(6,5,0.4,4,5,-9,gg,scene);
+b(6,5,0.4,-4,5,9,gg,scene); b(6,5,0.4,4,5,9,gg,scene);
+        // 6. Создаем цилиндры
+        createCylinder(20, 0, 0, -9, 0, material1, scene);
+ createCylinder(20, 0, 0, 9, 0, material1, scene);
+
+  for(var i1=0;i1<10;i1++){ if(i1<3 || i1>7){ if(i1%2==0){createCylinder(20,0, 0.8+i1*0.8, -9, 0, material1, scene); }else{createCylinder(20,0, 0.8+i1*0.8, -9, 0, material2, scene);}}else{createCylinder(3,0, 0.8+i1*0.8, -9, 0, material2, scene);createCylinder(3,8.5, 0.8+i1*0.8, -9, 0, material2, scene);createCylinder(3,-8.5, 0.8+i1*0.8, -9, 0, material2, scene);}} 
+
+  for(var i1=0;i1<10;i1++){ if(i1<3 || i1>7){ if(i1%2==0){createCylinder(20,0, 0.8+i1*0.8, 9, 0, material1, scene); }else{createCylinder(20,0, 0.8+i1*0.8, 9, 0, material2, scene);}}else{createCylinder(3,0, 0.8+i1*0.8, 9, 0, material2, scene);createCylinder(3,8.5, 0.8+i1*0.8, 9, 0, material2, scene);createCylinder(3,-8.5, 0.8+i1*0.8, 9, 0, material2, scene);}} 
+
+
+    createCylinder(20, 9, 0, 0, 2, material1, scene);
+     createCylinder(20,- 9, 0, 0, 2, material1, scene);
+   for(var i1=0;i1<10;i1++){  if(i1%2==0){createCylinder(20,- 9, 0.8+i1*0.8, 0.01, 2, material1, scene); }else{createCylinder(20,- 9, 0.8+i1*0.8, 0, 2, material2, scene);}}
+for(var i1=0;i1<10;i1++){ if(i1<8){ if(i1%2==0){createCylinder(8,9, 0.8+i1*0.8, -6, 2, material1, scene); createCylinder(8,9, 0.8+i1*0.8, 6, 2, material1, scene); }else{createCylinder(8, 9, 0.8+i1*0.8,- 6, 2, material2, scene);createCylinder(8,9, 0.8+i1*0.8, 6, 2, material1, scene); }}else{createCylinder(20, 9, 0.8+i1*0.8, 0, 2, material2, scene);}}
+
+
+
+
+
+
+        // 7. Анимация
         function animate() {
             requestAnimationFrame(animate);
-            controls.update(); // требуется, если controls.enableDamping = true
+            controls.update();
             renderer.render(scene, camera);
         }
-
-        // Запускаем приложение после загрузки страницы
-        window.onload = init;
+        
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth/window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        animate();
     </script>
 </body>
 </html>
